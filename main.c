@@ -5,8 +5,24 @@
 #include <glib.h>
 #include <sys/stat.h> // Needed for checking file existence
 
-void process_line(char *line, GHashTable *df_data, char **header)
+void process_line(char *line, GHashTable *df_data, GPtrArray * header_array)
 {
+    size_t len = strlen(line);
+    char *current_cell = line;
+    size_t index = 0;
+    for (size_t i = 0; i < len; i++)
+    {
+        if (line[i] == ',' || line[i] == '\0')
+        {
+            line[i] = '\0';
+            char* key = (char*)g_ptr_array_index(header_array,index);
+            GPtrArray *arr = g_hash_table_lookup(df_data,key);
+            g_ptr_array_add(arr,g_strdup(current_cell));
+            current_cell = line + i + 1;
+            index++;
+            
+        }
+    }
 }
 
 void get_headers(char *line, GHashTable *df_data, GPtrArray *header_array)
@@ -16,10 +32,12 @@ void get_headers(char *line, GHashTable *df_data, GPtrArray *header_array)
 
     for (size_t i = 0; i < len; ++i)
     {
-        if (line[i] == ',' || line[i] == '\0')
+        if (line[i] == ',' || line[i] == '\n' || line[i] == '\0')
         {
             line[i] = '\0';
-            g_ptr_array_add(header_array, strdup(current_header));
+            g_ptr_array_add(header_array, g_strdup(current_header));
+            GPtrArray *column_array = g_ptr_array_new_with_free_func(g_free);
+            g_hash_table_insert(df_data, g_strdup(current_header), column_array);
             current_header = line + i + 1; // Start of the next cell
         }
     }
@@ -85,9 +103,13 @@ int main(int argc, char *argv[])
         line = NULL;
     }
 
-    for (size_t i = 0; i < header_array->len; i++)
+
+    ssize_t read;
+    while ((read = getline(&line, &len, file)) != -1)
     {
-        printf("%s\n", (char *)g_ptr_array_index(header_array, i));
+        process_line(line,df_data,header_array);
+        free(line);
+        line=NULL;
     }
 
     g_hash_table_destroy(df_data);
